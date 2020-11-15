@@ -131,19 +131,56 @@ docker network create --attachable --driver overlay fabric-network
 
 可以在其他节点上执行`docker network ls`查看该网络
 
+## 克隆源文件夹
+
+源文件地址为 `git@github.com:Tiansir-wg/fabric-network-multihost.git`
+
+如果直接运行，那么只需要将源文件克隆到每个主机的`/root`目录下，然后启动对应的容器即可，其它操作都可以不执行。如果不直接执行，先将源文件克隆到manager 主机的`/root`目录下，删除以下目录:
+
+* `channel-artifacts`文件夹
+* `fabcar.tar.gz`文件
+* `system-genesis-block`文件夹
+* `organizations/peerOrganization`文件夹
+* `organizations/ordererOrganizations`文件夹
+* `organizations/fabric-ca/org1`、`organizations/fabric-ca/org2`、`organizations/fabric-ca/ordererOrg/`三个目录下除了`fabric-ca-server-config.yaml`文件外的所有文件和目录
+
+
+
+> 下面命令执行时如果没有指定目录则默认是在fabric-network-multihost目录下
+
 ## 启动CA并生成加密材料
 
 以org1为例:
 
-1. 启动`ca.org1.example.com`容器
+1. `ca.org1.example.com  `节点上启动`ca.org1.example.com`容器
 
    ```shell
    docker-compose -f dockerfiles/ca.org1.example.com.yaml up -d
    ```
 
-2. 
+2. 将`organizations`文件夹复制到`peer0.org1.example.com`下的`/root/fabric-network-multihost`目录下
 
+   ```shell
+   scp -r organizations root@peer0.org1.example.com:`pwd`
+   ```
 
+3. 在`peer0.org1.example.com `上进行注册 
+
+   ```sshell
+   chmod +x registerOrg1.sh
+   ./registerOrg1.sh
+   ```
+
+4. 将`organizations`文件夹复制到`peer1.org1.example.com`、`peer2.org1.example.com`、`manager`节点的`/root/fabric-network-multihost`目录下
+
+   ```shell
+   # 4.将生成的证书材料拷贝到manager、peer1.org1、peer2.org1上
+   scp -r organizations root@cello-master:`pwd`
+   scp -r organizations root@peer1.org1.example.com:`pwd`
+   scp -r organizations root@peer2.org1.example.com:`pwd`
+   ```
+
+下面是org1相关的所有配置
 
 ```shell
 # 1.启动ca.org1.example.com
@@ -159,7 +196,7 @@ scp -r organizations root@peer1.org1.example.com:`pwd`
 scp -r organizations root@peer2.org1.example.com:`pwd`
 ```
 
-org2
+下面是org2相关的所有配置
 
 ```shell
 # 1.启动ca.org2.example.com
@@ -175,7 +212,7 @@ scp -r organizations/ root@peer1.org2.example.com:`pwd`
 scp -r organizations/ root@peer2.org2.example.com:`pwd`
 ```
 
-orderer
+下面是 orderer相关的所有配置 
 
 ```shell
 # 1.启动ca.orderer.example.com
@@ -191,9 +228,11 @@ scp -r organizations/ root@orderer1.example.com:`pwd`
 scp -r organizations/ root@orderer2.example.com:`pwd`
 ```
 
-## 创世系统创世块
+> 以上执行完毕后将manager节点的`organizations`文件夹拷贝到其他所有节点对应位置上
 
-在manager上
+## 创建system-channel创世块
+
+在manager节点上执行
 
 ```shell
 export FABRIC_CFG_PATH=$PWD
@@ -202,13 +241,15 @@ configtxgen -profile TwoOrgsOrdererGenesis -channelID system-channel -outputBloc
 
 ## 创建通道事务
 
-manager上
+在manager节点上执行
 
 ```shell
 configtxgen -profile TwoOrgsChannel -outputCreateChannelTx ./channel-artifacts/mychannel.tx -channelID mychannel
 ```
 
 ## 创建锚节点事务
+
+在manager节点上执行
 
 ```shell
 configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org1MSPanchors.tx -channelID mychannel -asOrg Org1MSP
@@ -218,11 +259,11 @@ configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts
 
 ## 启动容器
 
-每次重新执行时先执行`docker system prune --volumes`
+> 每次重新执行时先执行`docker system prune --volumes`
 
-从manager上复制channel-artifacts和system-genesis-block文件夹到CA以外的所有其他主机
+从manager上复制`channel-artifacts`和`system-genesis-block`文件夹到CA以外的所有其他主机
 
-然后运行相应的脚本
+然后在各主机运行相应的脚本
 
 ```shell
 docker-compose -f dockerfiles/orderer0.example.com.yaml up -d
@@ -238,7 +279,7 @@ docker-compose -f dockerfiles/peer2.org2.example.com.yaml up -d
 
 ## 创建通道
 
-manager上
+在manager节点上执行
 
 ```shell
 export CORE_PEER_TLS_ENABLED=true
@@ -255,7 +296,7 @@ peer channel create -o orderer0.example.com:7050 -c mychannel -f ./channel-artif
 
 ## 加入节点
 
-manager上
+在manager节点上执行
 
 ```shell
 # peer0.org1
@@ -266,7 +307,6 @@ export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.examp
 export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
 export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
-
 peer channel join -b ./channel-artifacts/mychannel.block
 
 # peer1.org1
@@ -277,7 +317,6 @@ export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.examp
 export CORE_PEER_ADDRESS=peer1.org1.example.com:7051
 export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
-
 peer channel join -b ./channel-artifacts/mychannel.block
 
 # peer2.org1
@@ -288,7 +327,6 @@ export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.examp
 export CORE_PEER_ADDRESS=peer2.org1.example.com:7051
 export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
-
 peer channel join -b ./channel-artifacts/mychannel.block
 
 
@@ -300,7 +338,6 @@ export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org2.examp
 export CORE_PEER_ADDRESS=peer0.org2.example.com:7051
 export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
-
 peer channel join -b ./channel-artifacts/mychannel.block
 
 
@@ -312,7 +349,6 @@ export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org2.examp
 export CORE_PEER_ADDRESS=peer1.org2.example.com:7051
 export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
-
 peer channel join -b ./channel-artifacts/mychannel.block
 
 # peer2.org2
@@ -323,13 +359,12 @@ export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org2.examp
 export CORE_PEER_ADDRESS=peer2.org2.example.com:7051
 export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
-
 peer channel join -b ./channel-artifacts/mychannel.block
 ```
 
 ## 更新锚节点
 
-manager上
+在manager节点上执行
 
 ```shell
 # peer0.org1
@@ -362,9 +397,12 @@ peer channel update -o orderer0.example.com:7050 -c mychannel -f ./channel-artif
 需要先在manager上安装go语言环境
 
 ```shell
+# 安装到/opt目录下
 cd /opt
 wget https://studygolang.com/dl/golang/go1.15.4.linux-amd64.tar.gz
 tar -zxvf go1.15.4.linux-amd64.tar.gz
+
+# 配置go语言相关的环境变量
 cd go
 echo "export GOROOT=$PWD" >> /etc/profile
 echo "export PATH=$PATH:$PWD/bin" >> /etc/profile
@@ -382,15 +420,17 @@ go mod vendor
 popd
 ```
 
-打包链码
+然后打包链码
 
 ```shell
 peer lifecycle chaincode package fabcar.tar.gz --path ./chaincode/fabcar/go --lang golang --label fabcar_1
 ```
 
+最后将生成`fabcar.tar.gz`文件拷贝到所有的peer节点上
+
 ## 安装链码
 
-manager上
+在`peer0.org1.example.com`节点 上
 
 ```shell
 export CORE_PEER_TLS_ENABLED=true
@@ -402,8 +442,11 @@ export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers
 export FABRIC_CFG_PATH=$PWD
 
 peer lifecycle chaincode install fabcar.tar.gz
+```
 
-# peer1.org1
+在`peer1.org1.example.com`节点上
+
+```shell
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org1MSP"
 export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer1.org1.example.com/tls/ca.crt
@@ -413,8 +456,11 @@ export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers
 export FABRIC_CFG_PATH=$PWD
 
 peer lifecycle chaincode install fabcar.tar.gz
+```
 
-# peer2.org1
+在`peer2.org1.example.com`节点上
+
+```shell
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org1MSP"
 export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer2.org1.example.com/tls/ca.crt
@@ -424,8 +470,11 @@ export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers
 export FABRIC_CFG_PATH=$PWD
 
 peer lifecycle chaincode install fabcar.tar.gz
+```
 
-# peer0.org2
+在`peer0.org2.example.com`节点上
+
+```shell
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org2MSP"
 export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
@@ -435,9 +484,11 @@ export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers
 export FABRIC_CFG_PATH=$PWD
 
 peer lifecycle chaincode install fabcar.tar.gz
+```
 
+在`peer1.org2.example.com`节点上
 
-# peer1.org2
+```shell
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org2MSP"
 export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer1.org2.example.com/tls/ca.crt
@@ -447,8 +498,11 @@ export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers
 export FABRIC_CFG_PATH=$PWD
 
 peer lifecycle chaincode install fabcar.tar.gz
+```
 
-# peer2.org2
+在`peer2.org2.example.com`节点上
+
+```shell
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org2MSP"
 export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer2.org2.example.com/tls/ca.crt
@@ -472,17 +526,17 @@ peer lifecycle chaincode install fabcar.tar.gz
 # org1
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org1MSP"
-export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-export CORE_PEER_MSPCONFIGPATH=${PWD}/crypto-config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
 export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
-export ORDERER_CA=${PWD}/crypto-config/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
+export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer0.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 export FABRIC_CFG_PATH=$PWD
 export PACKAGE_ID=fabcar_1:762e0fe3dbeee0f7b08fb6200adeb4a3a20f649a00f168c0b3c2257e53b6e506
 
 peer lifecycle chaincode approveformyorg -o orderer0.example.com:7050 --tls --cafile $ORDERER_CA --channelID mychannel --name fabcar --version 1 --package-id ${PACKAGE_ID} --sequence 1
 ```
 
-执行以下命令查看审批状态
+可以执行以下命令查看审批状态
 
 ```shell
 peer lifecycle chaincode checkcommitreadiness --channelID mychannel --name fabcar --version 1 --sequence 1
@@ -522,7 +576,7 @@ Org2MSP: true
 
 ## 提交链码
 
-在manager上
+在manager节点上执行
 
 ```shell
 export PEER_CONN_PARMS="--peerAddresses peer0.org1.example.com:7051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses peer0.org2.example.com:7051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt"
@@ -544,7 +598,7 @@ Version: 1, Sequence: 1, Endorsement Plugin: escc, Validation Plugin: vscc, Appr
 
 ## 链码初始化
 
-manager上
+manager节点上执行
 
 ```shell
 export PEER_CONN_PARMS="--peerAddresses peer0.org1.example.com:7051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses peer0.org2.example.com:7051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt"
@@ -555,6 +609,8 @@ peer chaincode invoke -o orderer2.example.com:7050 --tls true --cafile $ORDERER_
 ```
 
 ## 链码查询测试
+
+在`peer0.org1.example.com`节点上执行
 
 ```shell
 # peer0.org1
@@ -569,7 +625,9 @@ export FABRIC_CFG_PATH=$PWD
 peer chaincode query -C mychannel -n fabcar -c '{"Args":["queryAllCars"]}'
 ```
 
+至此搭建成功，后面通过fabric-gateway-java提供的api与fabric区块链网络进行交互
 
+## 生成ccp文件 
 
-
+在manager节点上运行`ccp-generate.sh`脚本生成`connection-org1.yaml`文件，将该文件拷贝到Java项目目录下，后面就可以使用该文件连接区块链网络
 
