@@ -1,0 +1,24 @@
+version: "2"
+
+volumes:
+  orderer1.example.com:
+
+networks:
+  fabric-network:
+    external: true
+
+services:
+  orderer1.example.com:
+    container_name: orderer1.example.com
+    extends:
+      file: ../base/peer-base.yaml
+      service: orderer-base
+    volumes:
+      - ../system-genesis-block/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - ../organizations/ordererOrganizations/example.com/orderers/orderer1.example.com/msp:/var/hyperledger/orderer/msp
+      - ../organizations/ordererOrganizations/example.com/orderers/orderer1.example.com/tls/:/var/hyperledger/orderer/tls
+      - orderer1.example.com:/var/hyperledger/production/orderer
+    ports:
+      - 7050:7050
+    networks:
+      - fabric-network

@@ -1,0 +1,33 @@
+version: "2"
+
+volumes:
+  peer1.org2.example.com:
+
+networks:
+  fabric-network:
+    external: true
+
+services:
+  peer1.org2.example.com:
+    container_name: peer1.org2.example.com
+    extends:
+      file: ../base/peer-base.yaml
+      service: peer-base
+    environment:
+      - CORE_PEER_ID=peer1.org2.example.com
+      - CORE_PEER_ADDRESS=peer1.org2.example.com:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_CHAINCODEADDRESS=peer1.org2.example.com:7052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.org2.example.com:7051 peer1.org2.example.com:7051 peer2.org2.example.com:7051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.org2.example.com:7051
+      - CORE_PEER_LOCALMSPID=Org2MSP
+    volumes:
+      - /var/run/:/host/var/run/
+      - ../organizations/peerOrganizations/org2.example.com/peers/peer1.org2.example.com/msp:/etc/hyperledger/fabric/msp
+      - ../organizations/peerOrganizations/org2.example.com/peers/peer1.org2.example.com/tls:/etc/hyperledger/fabric/tls
+      - peer1.org2.example.com:/var/hyperledger/production
+    ports:
+      - 7051:7051
+    networks:
+      - fabric-network
