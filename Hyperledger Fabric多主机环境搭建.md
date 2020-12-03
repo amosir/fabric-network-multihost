@@ -56,6 +56,22 @@
 
    ```shell
    vim /etc/hosts
+   
+   cat >> /etc/hosts << EOF
+   10.245.150.80 orderer0.example.com
+   10.245.150.81 orderer1.example.com
+   10.245.150.82 orderer2.example.com
+   10.245.150.83 peer0.org1.example.com
+   10.245.150.84 peer1.org1.example.com
+   10.245.150.85 peer2.org1.example.com
+   10.245.150.86 peer0.org2.example.com
+   10.245.150.87 peer1.org2.example.com
+   10.245.150.88 peer2.org2.example.com
+   10.245.150.89 ca.org1.example.com
+   10.245.150.90 ca.org2.example.com
+   10.245.150.91 ca.orderer.example.com
+   10.245.150.92 zk.server
+   EOF
    ```
 
 ## 安装docker
@@ -63,12 +79,10 @@
 所有的虚拟机都需要执行
 
 ```shell
-# 删除之前安装的docker
+cd /opt
 yum remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
 rm -rf /opt/docker-ce*
-
-# 新的docker安装到/opt目录下
-cd /opt
+yum install -y wget
 wget https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-17.06.2.ce-1.el7.centos.x86_64.rpm
 yum -y install docker-ce-17.06.2.ce-1.el7.centos.x86_64.rpm
 ```
@@ -106,8 +120,9 @@ docker-compose --version
 在manager节点上使用`docker swarm`命令建立集群
 
 ```shell
-# 复制该命令执行的结果
 docker swarm init
+# 复制该命令执行的结果
+docker swarm join-token manager
 ```
 
 在其他所有主机上执行以下命令将节点以manager角色加入集群
@@ -178,6 +193,9 @@ docker network create --attachable --driver overlay fabric-network
    scp -r organizations root@cello-master:`pwd`
    scp -r organizations root@peer1.org1.example.com:`pwd`
    scp -r organizations root@peer2.org1.example.com:`pwd`
+   
+   scp -r fabric-network-multihost root@peer1.org1.example.com:`pwd`
+   scp -r fabric-network-multihost root@peer2.org1.example.com:`pwd`
    ```
 
 下面是org1相关的所有配置
@@ -191,7 +209,7 @@ scp -r organizations root@peer0.org1.example.com:`pwd`
 chmod +x registerOrg1.sh
 ./registerOrg1.sh
 # 4.将生成的证书材料拷贝到manager、peer1.org1、peer2.org1上
-scp -r organizations root@cello-master:`pwd`
+# scp -r organizations root@cello-master:`pwd`
 scp -r organizations root@peer1.org1.example.com:`pwd`
 scp -r organizations root@peer2.org1.example.com:`pwd`
 ```
@@ -210,6 +228,9 @@ chmod +x registerOrg2.sh
 scp -r organizations/ root@cello-master:`pwd`
 scp -r organizations/ root@peer1.org2.example.com:`pwd`
 scp -r organizations/ root@peer2.org2.example.com:`pwd`
+
+scp -r fabric-network-multihost/ root@peer1.org2.example.com:`pwd`
+scp -r fabric-network-multihost/ root@peer2.org2.example.com:`pwd`
 ```
 
 下面是 orderer相关的所有配置 
@@ -219,13 +240,13 @@ scp -r organizations/ root@peer2.org2.example.com:`pwd`
 docker-compose -f dockerfiles/ca.orderer.example.com.yaml up -d
 # 2.将organizations文件夹拷贝到orderer1.example.com
 scp -r organizations/ root@orderer0.example.com:`pwd`
-# 3.在peer0.org2上进行注册
+# 3.在orderer0上进行注册
 chmod +x registerOrderer.sh
 ./registerOrderer.sh
 # 4.将生成的证书材料拷贝到manager、orderer1.example.com、orderer2.example.com上
 scp -r organizations/ root@cello-master:`pwd`
-scp -r organizations/ root@orderer1.example.com:`pwd`
-scp -r organizations/ root@orderer2.example.com:`pwd`
+scp -r fabric-network-multihost/ root@orderer1.example.com:`pwd`
+scp -r fabric-network-multihost/ root@orderer2.example.com:`pwd`
 ```
 
 > 以上执行完毕后将manager节点的`organizations`文件夹拷贝到其他所有节点对应位置上
